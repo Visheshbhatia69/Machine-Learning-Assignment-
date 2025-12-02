@@ -3,7 +3,12 @@ import numpy as np
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from xgboost import XGBClassifier, plot_importance
+from sklearn.metrics import confusion_matrix, classification_report, f1_score
 from imblearn.over_sampling import SMOTE
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 #loading and checking data
 df = pd.read_csv("wallacecommunications.csv")
@@ -46,3 +51,42 @@ print(y_train_sm.value_counts())
 lr = LogisticRegression(max_iter=1000)
 lr_grid = GridSearchCV(lr,{'C':[0.01,0.1,1,10]},cv=5,scoring='f1')
 lr_grid.fit(X_train_sm,y_train_sm)
+
+#desicion tree
+dt = DecisionTreeClassifier(random_state=42)
+dt_grid = GridSearchCV(dt,{'max_depth':[5,10,20],'min_samples_split':[2,5,10]},
+                       cv=5,scoring='f1')
+dt_grid.fit(X_train_sm,y_train_sm)
+
+#xgboost
+xg = XGBClassifier(random_state=42,eval_metric='logloss')
+xg_grid = GridSearchCV(xg,{'n_estimators':[50,100,200],
+                           'learning_rate':[0.01,0.1,0.3]},
+                       cv=5,scoring='f1')
+xg_grid.fit(X_train_sm,y_train_sm)
+
+#f1 scores
+print("\nValidation F1 Scores:")
+for name,model in zip(["LR","DT","XGB"],
+                      [lr_grid.best_estimator_, dt_grid.best_estimator_, xg_grid.best_estimator_]):
+    yv = model.predict(X_val)
+    print(name,"->",f1_score(y_val,yv))
+
+#final evaluatiom
+models = {'Logistic Regression':lr_grid.best_estimator_,
+          'Decision Tree':dt_grid.best_estimator_,
+          'XGBoost':xg_grid.best_estimator_}
+
+for m in models:
+    print("\n-----",m,"-----")
+    pred = models[m].predict(X_test)
+    print(classification_report(y_test,pred))
+    cm = confusion_matrix(y_test,pred)
+    sns.heatmap(cm,annot=True,fmt='d')
+    plt.title(m+" Confusion Matrix")
+    plt.show()
+
+#extra plottings
+plot_importance(xg_grid.best_estimator_,max_num_features=10)
+plt.title("XGBoost Feature Importance")
+plt.show()
